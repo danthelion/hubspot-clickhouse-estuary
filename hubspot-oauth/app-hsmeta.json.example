@@ -1,0 +1,57 @@
+{
+  "uid": "estuary_demo_app",
+  "type": "app",
+  "config": {
+    "description": "Demo HubSpot OAuth app for the Estuary HubSpot ( Real-Time ) connector.",
+    "name": "Estuary Demo App",
+    "distribution": "private",
+    "auth": {
+      "type": "oauth",
+      "redirectUrls": [
+        "http://localhost:16963/"
+      ],
+      "requiredScopes": [
+        "oauth",
+        "crm.lists.read",
+        "crm.objects.companies.read",
+        "crm.objects.companies.write",
+        "crm.objects.contacts.read",
+        "crm.objects.contacts.write",
+        "crm.objects.deals.read",
+        "crm.objects.deals.write",
+        "crm.objects.owners.read",
+        "crm.schemas.companies.read",
+        "crm.schemas.contacts.read",
+        "crm.schemas.deals.read",
+        "e-commerce",
+        "forms",
+        "tickets"
+      ],
+      "optionalScopes": [
+        "automation",
+        "content",
+        "crm.objects.custom.read",
+        "crm.objects.feedback_submissions.read",
+        "crm.objects.goals.read",
+        "crm.objects.marketing_events.read",
+        "crm.objects.orders.read",
+        "crm.schemas.custom.read",
+        "marketing.campaigns.read"
+      ],
+      "conditionallyRequiredScopes": []
+    },
+    "permittedUrls": {
+      "fetch": [
+        "https://api.hubapi.com"
+      ],
+      "iframe": [],
+      "img": []
+    },
+    "support": {
+      "supportEmail": "you@example.com",
+      "documentationUrl": "https://docs.estuary.dev/reference/Connectors/capture-connectors/HubSpot-real-time/",
+      "supportUrl": "https://example.com",
+      "supportPhone": "+10000000000"
+    }
+  }
+}

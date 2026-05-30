@@ -1,0 +1,28 @@
+# Copy to flow.yaml (gitignored) and fill in real values, then run:
+#   flowctl raw discover --source flow.yaml
+#   flowctl catalog publish --source flow.yaml \
+#     --init-data-plane ops/dp/public/<region> \
+#     --auto-approve
+#
+# --init-data-plane must be a PUBLIC plane so the materialization can reach the
+# public ngrok endpoint we set up in clickhouse/docker-compose.yml. Query your
+# tenant's allowed planes with:
+#   flowctl raw get --table storage_mappings --query 'catalog_prefix=eq.<YOUR_TENANT>/'
+
+captures:
+  <YOUR_TENANT>/hubspot/source-hubspot-native:
+    endpoint:
+      connector:
+        # Pin the latest tag from the registry:
+        #   flowctl raw get --table connector_tags \
+        #     --query 'documentation_url=eq.https://go.estuary.dev/hubspot-real-time' \
+        #     --query 'select=image_tag' --output yaml
+        image: ghcr.io/estuary/source-hubspot-native:v1
+        config:
+          capturePropertyHistory: false
+          credentials:
+            credentials_title: "OAuth Credentials"
+            client_id: "<YOUR_HUBSPOT_OAUTH_CLIENT_ID>"
+            client_secret: "<YOUR_HUBSPOT_OAUTH_CLIENT_SECRET>"
+            refresh_token: "<YOUR_HUBSPOT_OAUTH_REFRESH_TOKEN>"
+    bindings: []   # populated by `flowctl raw discover`

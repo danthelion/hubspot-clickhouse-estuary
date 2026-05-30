@@ -1,0 +1,40 @@
+# Copy to flow.yaml (gitignored), fill in:
+#   - address: the public ngrok URL from `curl -sS http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url'`
+#     (drop the `tcp://` prefix; the resulting form is HOST:PORT)
+#   - password: matches CLICKHOUSE_PASSWORD in clickhouse/.env
+#   - bindings: one entry per HubSpot collection you want to land in ClickHouse
+#
+# Then publish on the SAME public data plane as the capture:
+#   flowctl catalog publish --source flow.yaml \
+#     --init-data-plane ops/dp/public/<region> --auto-approve
+
+materializations:
+  <YOUR_TENANT>/clickhouse/materialize-clickhouse:
+    endpoint:
+      connector:
+        # Pin the latest tag from the registry:
+        #   flowctl raw get --table connector_tags \
+        #     --query 'documentation_url=eq.https://go.estuary.dev/materialize-clickhouse' \
+        #     --query 'select=image_tag' --output yaml
+        image: ghcr.io/estuary/materialize-clickhouse:v1
+        config:
+          address: "<NGROK_HOST>:<NGROK_PORT>"
+          credentials:
+            auth_type: "user_password"
+            username: "estuary"
+            password: "<YOUR_CLICKHOUSE_PASSWORD>"
+          database: "demo"
+          advanced:
+            sslmode: "disable"   # ngrok TCP is plaintext, and our compose stack exposes CH native port 9000
+    bindings:
+      - source: <YOUR_TENANT>/hubspot/contacts
+        resource: { table: "contacts" }
+      - source: <YOUR_TENANT>/hubspot/companies
+        resource: { table: "companies" }
+      - source: <YOUR_TENANT>/hubspot/deals
+        resource: { table: "deals" }
+      # Add more bindings to mirror the rest of the collections discovered by the capture.
+      # The full set: campaigns, contact_list_memberships, contact_lists, deal_pipelines,
+      # email_events, engagements, feedback_submissions, form_submissions, forms, goals,
+      # line_items, marketing_emails, marketing_events, orders, owners, products,
+      # properties, tickets, workflows

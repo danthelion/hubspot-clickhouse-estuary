@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HubSpot → Estuary → ClickHouse</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #151a23;
+    --panel-2: #1d2330;
+    --text: #e6edf3;
+    --muted: #8b96a8;
+    --accent: #4ade80;
+    --accent-2: #60a5fa;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --border: #2a3142;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+               font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between;
+           padding: 16px 24px; border-bottom: 1px solid var(--border); }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .3px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px;
+           border-radius: 999px; background: var(--panel); border: 1px solid var(--border);
+           font-size: 12px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+         box-shadow: 0 0 0 0 rgba(74,222,128,.6); animation: pulse 2s infinite; }
+  .dot.off { background: var(--bad); animation: none; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(74,222,128,.6);} 70%{box-shadow:0 0 0 8px rgba(74,222,128,0);} 100%{box-shadow:0 0 0 0 rgba(74,222,128,0);} }
+
+  .wrap { padding: 20px 24px; display: grid; gap: 20px;
+          grid-template-columns: repeat(12, 1fr); }
+  .kpi { grid-column: span 3; background: var(--panel); border: 1px solid var(--border);
+         border-radius: 12px; padding: 18px 20px; }
+  .kpi .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .8px; }
+  .kpi .value { font-size: 30px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums;
+                transition: color .35s ease; }
+  .kpi.flash .value { color: var(--accent); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+           padding: 16px 20px; }
+  .panel h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted);
+              text-transform: uppercase; letter-spacing: .8px; }
+  .span-8 { grid-column: span 8; }
+  .span-4 { grid-column: span 4; }
+  .span-6 { grid-column: span 6; }
+  .span-12 { grid-column: span 12; }
+  canvas { max-height: 280px; }
+
+  .feed { max-height: 360px; overflow-y: auto; }
+  .feed::-webkit-scrollbar { width: 6px; }
+  .feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .ev { display: flex; gap: 12px; padding: 10px 6px; border-bottom: 1px dashed var(--border);
+        animation: slidein .4s ease; }
+  .ev:last-child { border-bottom: none; }
+  @keyframes slidein { from{opacity:0;transform:translateY(-6px);} to{opacity:1;transform:none;} }
+  .ev .pill { font-size: 10px; padding: 3px 8px; border-radius: 999px; font-weight: 600;
+              text-transform: uppercase; letter-spacing: .5px; display: inline-flex; align-items: center;
+              height: 18px; align-self: center; min-width: 64px; justify-content: center; }
+  .pill.contact { background: rgba(96,165,250,.15); color: var(--accent-2); }
+  .pill.company { background: rgba(251,191,36,.15); color: var(--warn); }
+  .pill.deal    { background: rgba(74,222,128,.15); color: var(--accent); }
+  .ev .text { flex: 1; min-width: 0; }
+  .ev .label { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev .detail { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev .when { font-size: 11px; color: var(--muted); align-self: center; white-space: nowrap; }
+  .op-d .label { text-decoration: line-through; color: var(--muted); }
+
+  footer { padding: 12px 24px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<header>
+  <h1>HubSpot → Estuary → ClickHouse <span style="color:var(--muted);font-weight:400">· Real-Time Dashboard</span></h1>
+  <span class="badge"><span id="dot" class="dot"></span><span id="status">connecting…</span></span>
+</header>
+
+<div class="wrap">
+  <div class="kpi" id="kpi-contacts"><div class="label">Contacts</div><div class="value">—</div></div>
+  <div class="kpi" id="kpi-companies"><div class="label">Companies</div><div class="value">—</div></div>
+  <div class="kpi" id="kpi-deals"><div class="label">Deals</div><div class="value">—</div></div>
+  <div class="kpi" id="kpi-deal_value"><div class="label">Pipeline value</div><div class="value">—</div></div>
+
+  <div class="panel span-8">
+    <h2>Deals by stage</h2>
+    <canvas id="stageChart"></canvas>
+  </div>
+  <div class="panel span-4">
+    <h2>Companies by industry</h2>
+    <canvas id="industryChart"></canvas>
+  </div>
+
+  <div class="panel span-8">
+    <h2>Sync activity (last 30 min)</h2>
+    <canvas id="timelineChart"></canvas>
+  </div>
+  <div class="panel span-4">
+    <h2>Live event feed</h2>
+    <div class="feed" id="feed"></div>
+  </div>
+</div>
+
+<footer>SSE stream auto-refreshes every 2s. ClickHouse views: <code>pipeline_kpis</code>, <code>deals_by_stage</code>, <code>events_feed</code>.</footer>
+
+<script>
+const fmtNum = n => new Intl.NumberFormat().format(n);
+const fmtMoney = n => '$' + new Intl.NumberFormat('en', {notation:'compact', maximumFractionDigits:1}).format(n);
+const fmtTime = iso => { const d = new Date(iso + 'Z'); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}); };
+const prev = {};
+
+function setKPI(id, value, formatter) {
+  const el = document.getElementById(id);
+  const cur = el.querySelector('.value');
+  const formatted = formatter(value);
+  if (cur.textContent !== formatted) {
+    cur.textContent = formatted;
+    if (prev[id] !== undefined && prev[id] !== value) {
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 700);
+    }
+    prev[id] = value;
+  }
+}
+
+const stageColors = {
+  appointmentscheduled: '#60a5fa', qualifiedtobuy: '#4ade80',
+  presentationscheduled: '#fbbf24', decisionmakerboughtin: '#a78bfa',
+  contractsent: '#f472b6', closedwon: '#22d3ee', closedlost: '#f87171',
+};
+const colorFor = s => stageColors[s] || '#94a3b8';
+
+Chart.defaults.color = '#8b96a8';
+Chart.defaults.borderColor = '#2a3142';
+Chart.defaults.font.family = 'inherit';
+
+const stageChart = new Chart(document.getElementById('stageChart'), {
+  type: 'bar',
+  data: { labels: [], datasets: [
+    { label: 'Count', data: [], yAxisID: 'y', backgroundColor: '#60a5fa' },
+    { label: 'Value ($)', data: [], yAxisID: 'y1', backgroundColor: '#4ade80', type:'line', tension:.3, borderColor:'#4ade80', borderWidth:2, pointRadius:3, fill:false },
+  ]},
+  options: {
+    animation: false,
+    transitions: { active: { animation: { duration: 0 } } },
+    maintainAspectRatio: false,
+    scales: {
+      y:  { position: 'left',  beginAtZero: true, title: { display: true, text: 'Deals' } },
+      y1: { position: 'right', beginAtZero: true, grid: { display: false }, title: { display: true, text: 'Value' },
+            ticks: { callback: v => fmtMoney(v) } },
+    },
+  }
+});
+
+const industryChart = new Chart(document.getElementById('industryChart'), {
+  type: 'doughnut',
+  data: { labels: [], datasets: [{ data: [], backgroundColor: ['#60a5fa','#4ade80','#fbbf24','#a78bfa','#f472b6','#22d3ee','#f87171','#94a3b8'] }] },
+  options: { animation: false, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } } }
+});
+
+const timelineChart = new Chart(document.getElementById('timelineChart'), {
+  type: 'bar',
+  data: { labels: [], datasets: [] },
+  options: {
+    animation: false,
+    maintainAspectRatio: false,
+    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } }
+  }
+});
+
+// Mutates chart.data in place and decides whether to animate. Animation only
+// kicks in when the label set actually changes (e.g. a new minute bucket on the
+// timeline). Value-only refreshes update silently via 'none' mode.
+function syncChart(chart, labels, datasetValuesByIndex) {
+  const labelsSame = chart.data.labels.length === labels.length
+                   && chart.data.labels.every((l, i) => l === labels[i]);
+  chart.data.labels = labels;
+  for (const [i, vals] of Object.entries(datasetValuesByIndex)) {
+    chart.data.datasets[i].data = vals;
+  }
+  chart.update(labelsSame ? 'none' : 'active');
+}
+
+function renderTimeline(rows) {
+  const types = ['contact', 'company', 'deal'];
+  const colors = { contact: '#60a5fa', company: '#fbbf24', deal: '#4ade80' };
+  const minutes = [...new Set(rows.map(r => r.minute))].sort();
+  const labels = minutes.map(m => {
+    const d = new Date(m + 'Z');
+    return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  });
+  // Datasets are stable across refreshes — create them once, then only swap data.
+  if (timelineChart.data.datasets.length !== types.length) {
+    timelineChart.data.datasets = types.map(t => ({ label: t, backgroundColor: colors[t], data: [] }));
+  }
+  const valuesByIndex = Object.fromEntries(types.map((t, i) => [
+    i, minutes.map(m => (rows.find(r => r.minute === m && r.type === t) || {count:0}).count),
+  ]));
+  syncChart(timelineChart, labels, valuesByIndex);
+}
+
+let lastEventKey = '';
+function renderFeed(events) {
+  const feed = document.getElementById('feed');
+  const key = events.length ? events[0].time + events[0].label : '';
+  if (key === lastEventKey) return;
+  lastEventKey = key;
+  feed.innerHTML = '';
+  for (const e of events) {
+    const div = document.createElement('div');
+    div.className = 'ev op-' + e.op;
+    div.innerHTML = `
+      <span class="pill ${e.type}">${e.type}</span>
+      <div class="text">
+        <div class="label">${e.label || '(unnamed)'}</div>
+        <div class="detail">${e.detail || ''}</div>
+      </div>
+      <span class="when">${fmtTime(e.time)}</span>`;
+    feed.appendChild(div);
+  }
+}
+
+function apply(snap) {
+  setKPI('kpi-contacts',   snap.kpis.contacts,   fmtNum);
+  setKPI('kpi-companies',  snap.kpis.companies,  fmtNum);
+  setKPI('kpi-deals',      snap.kpis.deals,      fmtNum);
+  setKPI('kpi-deal_value', snap.kpis.deal_value, fmtMoney);
+
+  // colors are derived from labels, so they only need to change when labels do
+  stageChart.data.datasets[0].backgroundColor = snap.stages.map(s => colorFor(s.stage));
+  syncChart(stageChart, snap.stages.map(s => s.stage), {
+    0: snap.stages.map(s => s.count),
+    1: snap.stages.map(s => s.value),
+  });
+
+  syncChart(industryChart, snap.industries.map(s => s.industry), {
+    0: snap.industries.map(s => s.count),
+  });
+
+  renderTimeline(snap.timeline);
+  renderFeed(snap.events);
+}
+
+function setStatus(ok, msg) {
+  document.getElementById('status').textContent = msg;
+  document.getElementById('dot').classList.toggle('off', !ok);
+}
+
+function start() {
+  const es = new EventSource('/api/stream');
+  es.onmessage = e => {
+    try { apply(JSON.parse(e.data)); setStatus(true, 'live'); }
+    catch (err) { setStatus(false, 'parse error'); console.error(err); }
+  };
+  es.onerror = () => {
+    setStatus(false, 'reconnecting…');
+    es.close();
+    setTimeout(start, 2000);
+  };
+}
+start();
+</script>
+</body>
+</html>
